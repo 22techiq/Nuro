@@ -1,0 +1,32 @@
+<h2>Pending Comments</h2>
+<div id="pending"></div>
+
+<script>
+const API="YOUR_WEB_APP_URL";
+
+fetch(API+"?action=pendingComments")
+.then(r=>r.json())
+.then(data=>{
+  const box=document.getElementById("pending");
+  data.forEach(c=>{
+    box.innerHTML+=`
+      <div>
+        <p>${c[2]}: ${c[3]}</p>
+        <button onclick="mod('${c[0]}','approved')">Approve</button>
+        <button onclick="mod('${c[0]}','rejected')">Reject</button>
+      </div>
+    `;
+  });
+});
+
+function mod(id,status){
+  fetch(API,{
+    method:"POST",
+    body:JSON.stringify({
+      action:"moderateComment",
+      comment_id:id,
+      status:status
+    })
+  }).then(()=>location.reload());
+}
+</script>
