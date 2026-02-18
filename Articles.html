@@ -1,0 +1,26 @@
+<h1 id="title"></h1>
+<img id="img" width="100%">
+<p id="content"></p>
+<div id="comments"></div>
+
+<script>
+const API="YOUR_WEB_APP_URL";
+const slug=new URLSearchParams(location.search).get("slug");
+
+fetch(API+"?action=articleBySlug&slug="+slug)
+.then(r=>r.json())
+.then(a=>{
+  document.getElementById("title").innerText=a[1];
+  document.getElementById("img").src=a[5];
+  document.getElementById("content").innerHTML=a[3];
+
+  fetch(API+"?action=comments&article_id="+a[0])
+  .then(r=>r.json())
+  .then(c=>{
+    const box=document.getElementById("comments");
+    c.forEach(x=>{
+      box.innerHTML+=`<p><b>${x[2]}</b>: ${x[3]}</p>`;
+    });
+  });
+});
+</script>
