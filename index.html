@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>GlobalPress</title>
+<style>
+body{margin:0;font-family:Arial;background:#f4f4f4}
+header{background:#cc0000;color:white;padding:15px}
+.ticker{background:black;color:white;padding:8px}
+.label{background:red;padding:4px 8px;font-weight:bold}
+.container{max-width:1100px;margin:auto;padding:20px}
+.card{background:white;padding:15px;margin-bottom:20px;border-radius:6px}
+</style>
+</head>
+<body>
+
+<header><h1>GlobalPress</h1></header>
+
+<div class="ticker">
+<span class="label">BREAKING</span>
+<marquee id="tickerText"></marquee>
+</div>
+
+<div class="container" id="articles"></div>
+
+<script>
+const API="YOUR_WEB_APP_URL";
+
+fetch(API+"?action=breaking")
+.then(r=>r.json())
+.then(data=>{
+  document.getElementById("tickerText")
+  .innerText=data.map(a=>a[1]).join(" • ");
+});
+
+fetch(API+"?action=articles")
+.then(r=>r.json())
+.then(data=>{
+  const box=document.getElementById("articles");
+  data.forEach(a=>{
+    box.innerHTML+=`
+      <div class="card">
+        <h2>${a[1]}</h2>
+        <img src="${a[5]}" width="100%">
+        <p>${a[3].substring(0,200)}...</p>
+        <a href="article.html?slug=${a[2]}">Read More</a>
+      </div>
+    `;
+  });
+});
+</script>
+
+</body>
+</html>
