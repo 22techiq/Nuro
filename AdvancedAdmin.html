@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Dashboard - GlobalPress</title>
+
+<style>
+body{
+  margin:0;
+  font-family:Arial;
+  background:#f4f4f4;
+}
+
+header{
+  background:#cc0000;
+  color:white;
+  padding:15px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+.container{
+  max-width:1200px;
+  margin:auto;
+  padding:20px;
+}
+
+.card{
+  background:white;
+  padding:20px;
+  margin-bottom:20px;
+  border-radius:6px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.1);
+}
+
+input, textarea, select{
+  width:100%;
+  padding:8px;
+  margin-top:8px;
+  margin-bottom:12px;
+}
+
+button{
+  background:#cc0000;
+  color:white;
+  padding:8px 14px;
+  border:none;
+  cursor:pointer;
+  border-radius:4px;
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+}
+
+table th, table td{
+  padding:8px;
+  border-bottom:1px solid #ddd;
+  text-align:left;
+}
+
+.stat-box{
+  display:flex;
+  gap:20px;
+}
+
+.stat{
+  background:#222;
+  color:white;
+  padding:15px;
+  border-radius:6px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h2>GlobalPress Admin</h2>
+  <button onclick="logout()">Logout</button>
+</header>
+
+<div class="container">
+
+  <!-- STATS -->
+  <div class="card">
+    <h3>System Stats</h3>
+    <div class="stat-box" id="stats"></div>
+  </div>
+
+  <!-- POST ARTICLE -->
+  <div class="card">
+    <h3>Post New Article</h3>
+    <input id="title" placeholder="Title">
+    <input id="category" placeholder="Category">
+    <input id="image" placeholder="Image URL">
+    <label><input type="checkbox" id="breaking"> Breaking News</label>
+    <textarea id="content" rows="6" placeholder="Content"></textarea>
+    <button onclick="postArticle()">Publish</button>
+  </div>
+
+  <!-- ARTICLES -->
+  <div class="card">
+    <h3>All Articles</h3>
+    <div id="articles"></div>
+  </div>
+
+  <!-- COMMENTS -->
+  <div class="card">
+    <h3>Pending Comments</h3>
+    <div id="comments"></div>
+  </div>
+
+  <!-- USERS -->
+  <div class="card">
+    <h3>Users</h3>
+    <div id="users"></div>
+  </div>
+
+</div>
+
+<script>
+const API=" https://script.google.com/macros/s/AKfycbxlDncSsQZSXJrJ6-dttceneARoV6lshz39ZJ4fTSNzvfmG_3fYW10_kQ5qqgpUvQkb/exec";
+const token=localStorage.getItem("token");
+
+if(!token){
+  alert("Unauthorized");
+  location.href="login.html";
+}
+
+/* LOGOUT */
+function logout(){
+  localStorage.clear();
+  location.href="login.html";
+}
+
+/* POST ARTICLE */
+function postArticle(){
+  fetch(API,{
+    method:"POST",
+    body:JSON.stringify({
+      action:"postArticle",
+      token,
+      title:document.getElementById("title").value,
+      content:document.getElementById("content").value,
+      category:document.getElementById("category").value,
+      image:document.getElementById("image").value,
+      breaking:document.getElementById("breaking").checked
+    })
+  }).then(r=>r.json())
+    .then(d=>{
+      if(d.success){
+        alert("Article posted");
+        loadArticles();
+      }else alert(d.error);
+    });
+}
+
+/* LOAD ARTICLES */
+function loadArticles(){
+  fetch(API+"?action=articles")
+  .then(r=>r.json())
+  .then(d=>{
+    const box=document.getElementById("articles");
+    box.innerHTML="";
+    d.articles.forEach(a=>{
+      box.innerHTML+=`
+        <div>
+          <b>${a.title}</b>
+          <button onclick="deleteArticle('${a.id}')">Delete</button>
+        </div>`;
+    });
+  });
+}
+
+/* DELETE ARTICLE */
+function deleteArticle(id){
+  fetch(API,{
+    method:"POST",
+    body:JSON.stringify({
+      action:"deleteArticle",
+      token,
+      articleId:id
+    })
+  }).then(()=>loadArticles());
+}
+
+/* LOAD COMMENTS */
+function loadComments(){
+  fetch(API+"?action=comments")
+  .then(r=>r.json())
+  .then(d=>{
+    const box=document.getElementById("comments");
+    box.innerHTML="";
+    d.forEach(c=>{
+      box.innerHTML+=`
+        <div>
+          ${c.user}: ${c.comment}
+          <button onclick="approve('${c.id}')">Approve</button>
+        </div>`;
+    });
+  });
+}
+
+/* APPROVE COMMENT */
+function approve(id){
+  fetch(API,{
+    method:"POST",
+    body:JSON.stringify({
+      action:"approveComment",
+      token,
+      commentId:id
+    })
+  }).then(()=>loadComments());
+}
+
+/* LOAD USERS */
+function loadUsers(){
+  fetch(API,{
+    method:"POST",
+    body:JSON.stringify({
+      action:"getUsers",
+      token
+    })
+  }).then(r=>r.json())
+  .then(d=>{
+    const box=document.getElementById("users");
+    box.innerHTML="";
+    d.users.forEach(u=>{
+      box.innerHTML+=`
+        <div>
+          ${u.email} (${u.role})
+          <button onclick="makeAdmin('${u.email}')">
+          Make Admin
+          </button>
+        </div>`;
+    });
+  });
+}
+
+/* UPDATE ROLE */
+function makeAdmin(email){
+  fetch(API,{
+    method:"POST",
+    body:JSON.stringify({
+      action:"updateRole",
+      token,
+      email,
+      role:"admin"
+    })
+  }).then(()=>loadUsers());
+}
+
+/* LOAD STATS */
+function loadStats(){
+  fetch(API,{
+    method:"POST",
+    body:JSON.stringify({
+      action:"stats",
+      token
+    })
+  }).then(r=>r.json())
+  .then(d=>{
+    document.getElementById("stats").innerHTML=`
+      <div class="stat">Articles: ${d.articles}</div>
+      <div class="stat">Users: ${d.users}</div>
+      <div class="stat">Comments: ${d.comments}</div>
+    `;
+  });
+}
+
+/* INIT */
+loadArticles();
+loadComments();
+loadUsers();
+loadStats();
+</script>
+
+</body>
+</html>
+ 
