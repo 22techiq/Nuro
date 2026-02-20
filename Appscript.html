@@ -261,4 +261,89 @@ function doPost(e) {
   return json({error:"Invalid action"});
 }
 
-https://script.google.com/macros/s/AKfycbxlDncSsQZSXJrJ6-dttceneARoV6lshz39ZJ4fTSNzvfmG_3fYW10_kQ5qqgpUvQkb/exec
+
+//DELETE ARRTICLE
+function deleteArticle(d){
+  const v=verify(d.token);
+  if(!v.valid) return {error:"Unauthorized"};
+
+  const users=sheet("Users").getDataRange().getValues();
+  const u=users.find(r=>r[2]==v.email);
+  if(u[5]!="admin") return {error:"Forbidden"};
+
+  const sh=sheet("Articles");
+  const rows=sh.getDataRange().getValues();
+
+  for(let i=1;i<rows.length;i++){
+    if(rows[i][0]==d.id){
+      sh.deleteRow(i+1);
+      return {success:true};
+    }
+  }
+}
+//EDIT ARTICLE
+function editArticle(d){
+  const v=verify(d.token);
+  if(!v.valid) return {error:"Unauthorized"};
+
+  const sh=sheet("Articles");
+  const rows=sh.getDataRange().getValues();
+
+  for(let i=1;i<rows.length;i++){
+    if(rows[i][0]==d.id){
+      sh.getRange(i+1,2).setValue(d.title);
+      sh.getRange(i+1,4).setValue(d.content);
+      sh.getRange(i+1,6).setValue(d.image);
+      return {success:true};
+    }
+  }
+}
+
+//Get users
+function getUsers(d){
+  const v=verify(d.token);
+  if(!v.valid) return {error:"Unauthorized"};
+
+  const rows=sheet("Users").getDataRange().getValues();
+  return rows.slice(1);
+}
+
+//Promote user
+function updateRole(d){
+  const v=verify(d.token);
+  if(!v.valid) return {error:"Unauthorized"};
+
+  const sh=sheet("Users");
+  const rows=sh.getDataRange().getValues();
+
+  for(let i=1;i<rows.length;i++){
+    if(rows[i][0]==d.id){
+      sh.getRange(i+1,6).setValue(d.role);
+      return {success:true};
+    }
+  }
+}
+//Dashboard stats
+function stats(d){
+  const v=verify(d.token);
+  if(!v.valid) return {error:"Unauthorized"};
+
+  return {
+    users: sheet("Users").getLastRow()-1,
+    articles: sheet("Articles").getLastRow()-1,
+    comments: sheet("Comments").getLastRow()-1
+  };
+}
+
+//switch (case "deleteArticle": return deleteArticle(data);
+case "editArticle": return editArticle(data);
+case "getUsers": return getUsers(data);
+case "updateRole": return updateRole(data);
+case "stats": return stats(data);) {
+  case 'case':
+    // Tab to edit
+    break;
+  
+  default:
+    // Tab to edit
+}
