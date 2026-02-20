@@ -1,142 +1,262 @@
-const SHEET_ID = "PASTE_YOUR_SHEET_ID_HERE";
 
-/* ================= ENTRY POINT ================= */
-function doGet(e) {
+  
+  const DB = SpreadsheetApp.getActive();
+const SECRET = "SUPER_SECRET_KEY_CHANGE_THIS";
+const TOKEN_EXPIRY_MINUTES = 60;
+const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_WINDOW = 60000;
 
-  const action = e.parameter.action;
+/* =========================
+   UTILITIES
+========================= */
 
-  if (!action) {
-    return output({ error: "No action specified" });
-  }
-
-  switch (action) {
-
-    case "articles":
-      return getArticles();
-
-    case "breaking":
-      return getBreaking();
-
-    case "article":
-      return getSingleArticle(e.parameter.slug);
-
-    default:
-      return output({ error: "Invalid action" });
-  }
-}
-
-/* ================= GET ALL ARTICLES ================= */
-function getArticles() {
-
-  const sheet = SpreadsheetApp.openById(SHEET_ID)
-                .getSheetByName("Articles");
-
-  let data = sheet.getDataRange().getValues();
-
-  if (data.length <= 1) {
-    return output({ articles: [] });
-  }
-
-  data.shift(); // remove header
-
-  // Ensure proper formatting
-  data = data.map(row => formatRow(row));
-
-  // Newest first
-  data.reverse();
-
-  return output({
-    articles: data
-  });
-}
-
-/* ================= GET BREAKING ================= */
-function getBreaking() {
-
-  const sheet = SpreadsheetApp.openById(SHEET_ID)
-                .getSheetByName("Articles");
-
-  let data = sheet.getDataRange().getValues();
-
-  if (data.length <= 1) {
-    return output([]);
-  }
-
-  data.shift();
-
-  data = data.map(row => formatRow(row));
-
-  const breaking = data.filter(row => row[7] === true);
-
-  return output(breaking);
-}
-
-/* ================= GET SINGLE ARTICLE ================= */
-function getSingleArticle(slug) {
-
-  if (!slug) {
-    return output({ error: "No slug provided" });
-  }
-
-  const sheet = SpreadsheetApp.openById(SHEET_ID)
-                .getSheetByName("Articles");
-
-  let data = sheet.getDataRange().getValues();
-
-  if (data.length <= 1) {
-    return output({ error: "No articles found" });
-  }
-
-  data.shift();
-
-  for (let i = 0; i < data.length; i++) {
-
-    const row = formatRow(data[i]);
-
-    if (row[2] === slug) {
-
-      // Increment views
-      const rowIndex = i + 2; // +2 because header removed
-      const currentViews = row[8] || 0;
-
-      sheet.getRange(rowIndex, 9)
-           .setValue(currentViews + 1);
-
-      row[8] = currentViews + 1;
-
-      return output(row);
-    }
-  }
-
-  return output({ error: "Article not found" });
-}
-
-/* ================= FORMAT ROW ================= */
-function formatRow(row) {
-
-  return [
-    row[0],                          // ID
-    row[1],                          // Title
-    row[2],                          // Slug
-    row[3],                          // Content
-    row[4],                          // Category
-    row[5],                          // Date
-    row[6] || "",                    // ImageURL
-    row[7] === true || row[7] === "TRUE",  // Breaking (force boolean)
-    Number(row[8]) || 0              // Views
-  ];
-}
-
-/* ================= JSON OUTPUT ================= */
-function output(data) {
+function json(data) {
   return ContentService
     .createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-    https://script.google.com/macros/s/AKfycbwJxBwhMGBeK_qiTn2BK11pjA424QiI527LzxT3cDbrmUtbXvwf5qJCISn59HGsphpn/exec
+function sha256(text) {
+  return Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    text
+  ).map(b => ('0' + (b & 0xFF).toString(16)).slice(-2)).join('');
+}
 
+function generateSalt() {
+  return Utilities.getUuid();
+}
 
-1 | Kenya Economy Grows | kenya-economy-grows | Full article content here... | Business | 2026-02-10 | https://picsum.photos/400/200 | TRUE | 0
-2 | AI Revolution 2026 | ai-revolution-2026 | AI article content... | Technology | 2026-02-12 | https://picsum.photos/400/201 | FALSE | 0
-3 | Sports Update | sports-update | Sports article content... | Sports | 2026-02-14 | https://picsum.photos/400/202 | TRUE | 0
+function encrypt(text) {
+  const iv = Utilities.getUuid().substring(0,16);
+  const key = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    SECRET
+  );
+  const encrypted = Utilities.base64Encode(text + SECRET);
+  return { encrypted, iv };
+}
+
+function decrypt(text) {
+  const decoded = Utilities.newBlob(
+    Utilities.base64Decode(text)
+  ).getDataAsString();
+  return decoded.replace(SECRET,'');
+}
+
+function generateToken(email) {
+  const payload = email + "|" + Date.now();
+  const encrypted = Utilities.base64Encode(payload + SECRET);
+  return encrypted;
+}
+
+function validateToken(token) {
+  const sessions = DB.getSheetByName("Sessions").getDataRange().getValues();
+  for(let i=1;i<sessions.length;i++){
+    if(sessions[i][0] === token){
+      if(Number(sessions[i][2]) > Date.now()){
+        return sessions[i][1];
+      }
+    }
+  }
+  return null;
+}
+
+function rateLimit(email){
+  const sheet = DB.getSheetByName("RateLimit");
+  const data = sheet.getDataRange().getValues();
+  const now = Date.now();
+
+  for(let i=1;i<data.length;i++){
+    if(data[i][0] === email){
+      if(now - data[i][1] < RATE_LIMIT_WINDOW){
+        if(data[i][2] >= RATE_LIMIT_MAX) return false;
+        sheet.getRange(i+1,3).setValue(data[i][2]+1);
+        return true;
+      } else {
+        sheet.getRange(i+1,2,1,2).setValues([[now,1]]);
+        return true;
+      }
+    }
+  }
+
+  sheet.appendRow([email,now,1]);
+  return true;
+}
+
+/* =========================
+   GET ROUTER
+========================= */
+
+function doGet(e) {
+  const action = e.parameter.action;
+
+  if(action==="articles"){
+    const data = DB.getSheetByName("Articles").getDataRange().getValues();
+    const articles=[];
+    for(let i=1;i<data.length;i++){
+      articles.push({
+        id:data[i][0],
+        title:data[i][1],
+        content:data[i][2],
+        category:data[i][3],
+        image:data[i][4],
+        slug:data[i][5],
+        views:data[i][6],
+        breaking:data[i][7],
+        date:data[i][8]
+      });
+    }
+    return json({articles});
+  }
+
+  if(action==="breaking"){
+    const data = DB.getSheetByName("Articles").getDataRange().getValues();
+    const breaking=data.filter((r,i)=>i>0 && r[7]==="yes");
+    return json(breaking);
+  }
+
+  if(action==="comments"){
+    const slug=e.parameter.slug;
+    const sheet=DB.getSheetByName("Comments").getDataRange().getValues();
+    const approved=[];
+    for(let i=1;i<sheet.length;i++){
+      if(sheet[i][1]===slug && sheet[i][4]==="yes"){
+        approved.push({
+          user:sheet[i][2],
+          comment:decrypt(sheet[i][3]),
+          date:sheet[i][5]
+        });
+      }
+    }
+    return json(approved);
+  }
+
+  return json({error:"Invalid action"});
+}
+
+/* =========================
+   POST ROUTER
+========================= */
+
+function doPost(e) {
+  const data = JSON.parse(e.postData.contents);
+  const action=data.action;
+
+  /* REGISTER */
+  if(action==="register"){
+    const users=DB.getSheetByName("Users");
+    const all=users.getDataRange().getValues();
+    for(let i=1;i<all.length;i++){
+      if(all[i][2]===data.email)
+        return json({error:"Email exists"});
+    }
+    const salt=generateSalt();
+    const hash=sha256(data.password+salt);
+    users.appendRow([
+      Utilities.getUuid(),
+      data.name,
+      data.email,
+      hash,
+      salt,
+      "user"
+    ]);
+    return json({success:true});
+  }
+
+  /* LOGIN */
+  if(action==="login"){
+    const users=DB.getSheetByName("Users").getDataRange().getValues();
+    for(let i=1;i<users.length;i++){
+      if(users[i][2]===data.email){
+        const hash=sha256(data.password+users[i][4]);
+        if(hash===users[i][3]){
+          const token=generateToken(data.email);
+          DB.getSheetByName("Sessions")
+            .appendRow([token,data.email,
+              Date.now()+TOKEN_EXPIRY_MINUTES*60000,
+              Utilities.getUuid()]);
+          return json({
+            token,
+            user:{
+              name:users[i][1],
+              email:data.email,
+              role:users[i][5]
+            }
+          });
+        }
+      }
+    }
+    return json({error:"Invalid credentials"});
+  }
+
+  /* COMMENT */
+  if(action==="comment"){
+    const email=validateToken(data.token);
+    if(!email) return json({error:"Unauthorized"});
+    if(!rateLimit(email)) return json({error:"Too many requests"});
+
+    const enc=encrypt(data.comment);
+    DB.getSheetByName("Comments").appendRow([
+      Utilities.getUuid(),
+      data.slug,
+      email,
+      enc.encrypted,
+      "no",
+      new Date(),
+      enc.iv
+    ]);
+
+    return json({success:true});
+  }
+
+  /* POST ARTICLE (ADMIN) */
+  if(action==="postArticle"){
+    const email=validateToken(data.token);
+    if(!email) return json({error:"Unauthorized"});
+
+    const users=DB.getSheetByName("Users").getDataRange().getValues();
+    const user=users.find(r=>r[2]===email);
+    if(user[5]!=="admin")
+      return json({error:"Admin only"});
+
+    const slug=data.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g,'-');
+
+    DB.getSheetByName("Articles").appendRow([
+      Utilities.getUuid(),
+      data.title,
+      data.content,
+      data.category,
+      data.image,
+      slug,
+      0,
+      data.breaking?"yes":"no",
+      new Date()
+    ]);
+
+    return json({success:true});
+  }
+
+  /* APPROVE COMMENT (ADMIN) */
+  if(action==="approveComment"){
+    const email=validateToken(data.token);
+    if(!email) return json({error:"Unauthorized"});
+    const users=DB.getSheetByName("Users").getDataRange().getValues();
+    const user=users.find(r=>r[2]===email);
+    if(user[5]!=="admin")
+      return json({error:"Admin only"});
+
+    const sheet=DB.getSheetByName("Comments");
+    const dataSheet=sheet.getDataRange().getValues();
+    for(let i=1;i<dataSheet.length;i++){
+      if(dataSheet[i][0]===data.commentId){
+        sheet.getRange(i+1,5).setValue("yes");
+        return json({success:true});
+      }
+    }
+  }
+
+  return json({error:"Invalid action"});
+}
