@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>GlobalPress Admin</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body{margin:0;font-family:Arial;background:#f4f4f4}
+header{background:#111;color:#fff;padding:15px}
+.container{max-width:1200px;margin:auto;padding:20px}
+.card{background:#fff;padding:20px;border-radius:8px;margin-bottom:20px}
+input,textarea,select{width:100%;padding:10px;margin:5px 0}
+button{padding:8px 15px;background:#cc0000;color:#fff;border:none;border-radius:4px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.smallbtn{background:#333;margin-top:5px}
+.stat{font-size:20px;font-weight:bold}
+@media(max-width:768px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<header><h2>GlobalPress Admin Dashboard</h2></header>
+
+<div class="container">
+
+<div class="grid">
+<div class="card">
+<h3>📊 Stats</h3>
+<div id="stats"></div>
+</div>
+
+<div class="card">
+<h3>📝 Post Article</h3>
+<input id="title" placeholder="Title">
+<input id="image" placeholder="Image URL">
+<textarea id="content" placeholder="Article content"></textarea>
+<button onclick="postArticle()">Publish</button>
+</div>
+</div>
+
+<div class="card">
+<h3>📚 All Articles</h3>
+<div id="articles"></div>
+</div>
+
+<div class="card">
+<h3>💬 Comment Moderation</h3>
+<div id="comments"></div>
+</div>
+
+<div class="card">
+<h3>👥 User Management</h3>
+<div id="users"></div>
+</div>
+
+</div>
+
+<script>
+const API="https://script.google.com/macros/s/AKfycbxlDncSsQZSXJrJ6-dttceneARoV6lshz39ZJ4fTSNzvfmG_3fYW10_kQ5qqgpUvQkb/exec";
+const token=localStorage.getItem("token");
+
+if(!token){ alert("Login required"); location.href="login.html"; }
+
+// LOAD STATS
+fetch(API,{method:"POST",
+body:JSON.stringify({action:"stats",token})})
+.then(r=>r.json())
+.then(d=>{
+stats.innerHTML=`
+<div class="stat">Users: ${d.users}</div>
+<div class="stat">Articles: ${d.articles}</div>
+<div class="stat">Comments: ${d.comments}</div>
+`;
+});
+
+// POST ARTICLE
+function postArticle(){
+fetch(API,{
+method:"POST",
+body:JSON.stringify({
+action:"postArticle",
+token,
+title:title.value,
+image:image.value,
+content:content.value
+})
+}).then(()=>location.reload());
+}
+
+// LOAD ARTICLES
+fetch(API+"?action=getArticles")
+.then(r=>r.json())
+.then(data=>{
+articles.innerHTML=data.map(a=>`
+<div>
+<b>${a[1]}</b>
+<button class="smallbtn" onclick="del('${a[0]}')">Delete</button>
+</div>
+`).join("");
+});
+
+function del(id){
+fetch(API,{
+method:"POST",
+body:JSON.stringify({action:"deleteArticle",token,id})
+}).then(()=>location.reload());
+}
+
+// LOAD COMMENTS
+fetch(API,{
+method:"POST",
+body:JSON.stringify({action:"adminComments",token})
+})
+.then(r=>r.json())
+.then(data=>{
+comments.innerHTML=data.slice(1).map(c=>`
+<div>
+<p>${c[2]}: ${atob(c[3])}</p>
+<button onclick="approve('${c[0]}')">Approve</button>
+</div>
+`).join("");
+});
+
+function approve(id){
+fetch(API,{
+method:"POST",
+body:JSON.stringify({action:"approveComment",token,id})
+}).then(()=>location.reload());
+}
+
+// LOAD USERS
+fetch(API,{
+method:"POST",
+body:JSON.stringify({action:"getUsers",token})
+})
+.then(r=>r.json())
+.then(data=>{
+users.innerHTML=data.map(u=>`
+<div>
+${u[1]} (${u[2]}) - ${u[5]}
+<select onchange="updateRole('${u[0]}',this.value)">
+<option value="user">user</option>
+<option value="admin">admin</option>
+</select>
+</div>
+`).join("");
+});
+
+function updateRole(id,role){
+fetch(API,{
+method:"POST",
+body:JSON.stringify({action:"updateRole",token,id,role})
+}).then(()=>location.reload());
+}
+</script>
+
+</body>
+</html>
