@@ -1,270 +1,135 @@
-const SHEET_ID = "PASTE_SHEET_ID_HERE";
+const SHEET_ID = "PASTE_YOUR_SHEET_ID_HERE";
 
-/* ===========================
-   ENTRY POINTS
-=========================== */
+/* ================= ENTRY POINT ================= */
+function doGet(e) {
 
-function doPost(e){
-  const data = JSON.parse(e.postData.contents);
-  const action = data.action;
-
-  switch(action){
-    case "register": return register(data);
-    case "login": return login(data);
-    case "addArticle": return addArticle(data);
-    case "approveArticle": return approveArticle(data);
-    case "addComment": return addComment(data);
-    case "moderateComment": return moderateComment(data);
-  }
-
-  return json({status:"invalid"});
-}
-
-function doGet(e){
   const action = e.parameter.action;
 
-  if(action==="articles") return getPublishedArticles();
-  if(action==="articleBySlug") return getArticleBySlug(e.parameter.slug);
-  if(action==="breaking") return getBreakingNews();
-  if(action==="comments") return getApprovedComments(e.parameter.article_id);
-  if(action==="pendingComments") return getPendingComments();
+  if (!action) {
+    return output({ error: "No action specified" });
+  }
 
-  return json({status:"invalid"});
+  switch (action) {
+
+    case "articles":
+      return getArticles();
+
+    case "breaking":
+      return getBreaking();
+
+    case "article":
+      return getSingleArticle(e.parameter.slug);
+
+    default:
+      return output({ error: "Invalid action" });
+  }
 }
 
-/* ===========================
-   UTILITIES
-=========================== */
+/* ================= GET ALL ARTICLES ================= */
+function getArticles() {
 
-function json(obj){
+  const sheet = SpreadsheetApp.openById(SHEET_ID)
+                .getSheetByName("Articles");
+
+  let data = sheet.getDataRange().getValues();
+
+  if (data.length <= 1) {
+    return output({ articles: [] });
+  }
+
+  data.shift(); // remove header
+
+  // Ensure proper formatting
+  data = data.map(row => formatRow(row));
+
+  // Newest first
+  data.reverse();
+
+  return output({
+    articles: data
+  });
+}
+
+/* ================= GET BREAKING ================= */
+function getBreaking() {
+
+  const sheet = SpreadsheetApp.openById(SHEET_ID)
+                .getSheetByName("Articles");
+
+  let data = sheet.getDataRange().getValues();
+
+  if (data.length <= 1) {
+    return output([]);
+  }
+
+  data.shift();
+
+  data = data.map(row => formatRow(row));
+
+  const breaking = data.filter(row => row[7] === true);
+
+  return output(breaking);
+}
+
+/* ================= GET SINGLE ARTICLE ================= */
+function getSingleArticle(slug) {
+
+  if (!slug) {
+    return output({ error: "No slug provided" });
+  }
+
+  const sheet = SpreadsheetApp.openById(SHEET_ID)
+                .getSheetByName("Articles");
+
+  let data = sheet.getDataRange().getValues();
+
+  if (data.length <= 1) {
+    return output({ error: "No articles found" });
+  }
+
+  data.shift();
+
+  for (let i = 0; i < data.length; i++) {
+
+    const row = formatRow(data[i]);
+
+    if (row[2] === slug) {
+
+      // Increment views
+      const rowIndex = i + 2; // +2 because header removed
+      const currentViews = row[8] || 0;
+
+      sheet.getRange(rowIndex, 9)
+           .setValue(currentViews + 1);
+
+      row[8] = currentViews + 1;
+
+      return output(row);
+    }
+  }
+
+  return output({ error: "Article not found" });
+}
+
+/* ================= FORMAT ROW ================= */
+function formatRow(row) {
+
+  return [
+    row[0],                          // ID
+    row[1],                          // Title
+    row[2],                          // Slug
+    row[3],                          // Content
+    row[4],                          // Category
+    row[5],                          // Date
+    row[6] || "",                    // ImageURL
+    row[7] === true || row[7] === "TRUE",  // Breaking (force boolean)
+    Number(row[8]) || 0              // Views
+  ];
+}
+
+/* ================= JSON OUTPUT ================= */
+function output(data) {
   return ContentService
-    .createTextOutput(JSON.stringify(obj))
+    .createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
-}
-
-function hashPassword(pw){
-  return Utilities.computeDigest(
-    Utilities.DigestAlgorithm.SHA_256, pw
-  ).map(b => (b+256).toString(16).slice(-2)).join("");
-}
-
-function generateSlug(title){
-  return title
-    .toLowerCase()
-    .replace(/[^\w\s]/g,'')
-    .replace(/\s+/g,'-')
-    + "-" + Math.floor(Math.random()*1000);
-}
-
-function getUserByEmail(email){
-  const sheet = SpreadsheetApp.openById(SHEET_ID)
-    .getSheetByName("Users");
-
-  const data = sheet.getDataRange().getValues();
-  data.shift();
-
-  const user = data.find(r=>r[2]===email);
-  if(!user) return null;
-
-  return {
-    email:user[2],
-    role:user[4],
-    status:user[5]
-  };
-}
-
-/* ===========================
-   AUTH
-=========================== */
-
-function register(data){
-  const sheet = SpreadsheetApp.openById(SHEET_ID)
-    .getSheetByName("Users");
-
-  const users = sheet.getDataRange().getValues();
-
-  for(let i=1;i<users.length;i++){
-    if(users[i][2]===data.email){
-      return json({status:"exists"});
-    }
-  }
-
-  sheet.appendRow([
-    Utilities.getUuid(),
-    data.fullname,
-    data.email,
-    hashPassword(data.password),
-    "user",
-    "active",
-    new Date()
-  ]);
-
-  return json({status:"success"});
-}
-
-function login(data){
-  const sheet = SpreadsheetApp.openById(SHEET_ID)
-    .getSheetByName("Users");
-
-  const users = sheet.getDataRange().getValues();
-
-  for(let i=1;i<users.length;i++){
-    if(
-      users[i][2]===data.email &&
-      users[i][3]===hashPassword(data.password) &&
-      users[i][5]==="active"
-    ){
-      return json({
-        status:"success",
-        role:users[i][4],
-        email:data.email
-      });
-    }
-  }
-
-  return json({status:"error"});
-}
-
-/* ===========================
-   ARTICLES
-=========================== */
-
-function addArticle(data){
-  const user = getUserByEmail(data.author_email);
-
-  if(!user || 
-    (user.role!=="admin" && user.role!=="journalist")){
-      return json({status:"unauthorized"});
-  }
-
-  const slug = generateSlug(data.title);
-
-  const sheet = SpreadsheetApp.openById(SHEET_ID)
-    .getSheetByName("Articles");
-
-  sheet.appendRow([
-    Utilities.getUuid(),
-    data.title,
-    slug,
-    data.content,
-    data.category,
-    data.image_url,
-    data.author_email,
-    "draft",
-    new Date(),
-    data.breaking || "no"
-  ]);
-
-  return json({status:"success", slug:slug});
-}
-
-function approveArticle(data){
-  const sheet = SpreadsheetApp.openById(SHEET_ID)
-    .getSheetByName("Articles");
-
-  const rows = sheet.getDataRange().getValues();
-
-  for(let i=1;i<rows.length;i++){
-    if(rows[i][0]===data.article_id){
-      sheet.getRange(i+1,8).setValue("published");
-      break;
-    }
-  }
-
-  return json({status:"published"});
-}
-
-function getPublishedArticles(){
-  const sheet = SpreadsheetApp.openById(SHEET_ID)
-    .getSheetByName("Articles");
-
-  const data = sheet.getDataRange().getValues();
-  data.shift();
-
-  return json(
-    data.filter(r=>r[7]==="published")
-  );
-}
-
-function getArticleBySlug(slug){
-  const sheet = SpreadsheetApp.openById(SHEET_ID)
-    .getSheetByName("Articles");
-
-  const data = sheet.getDataRange().getValues();
-  data.shift();
-
-  const article = data.find(r=>r[2]===slug);
-  return json(article || {});
-}
-
-function getBreakingNews(){
-  const sheet = SpreadsheetApp.openById(SHEET_ID)
-    .getSheetByName("Articles");
-
-  const data = sheet.getDataRange().getValues();
-  data.shift();
-
-  return json(
-    data.filter(r=>r[9]==="yes" && r[7]==="published")
-  );
-}
-
-/* ===========================
-   COMMENTS
-=========================== */
-
-function addComment(data){
-  const sheet = SpreadsheetApp.openById(SHEET_ID)
-    .getSheetByName("Comments");
-
-  sheet.appendRow([
-    Utilities.getUuid(),
-    data.article_id,
-    data.user_email,
-    data.comment,
-    "pending",
-    new Date()
-  ]);
-
-  return json({status:"success"});
-}
-
-function moderateComment(data){
-  const sheet = SpreadsheetApp.openById(SHEET_ID)
-    .getSheetByName("Comments");
-
-  const rows = sheet.getDataRange().getValues();
-
-  for(let i=1;i<rows.length;i++){
-    if(rows[i][0]===data.comment_id){
-      sheet.getRange(i+1,5).setValue(data.status);
-      break;
-    }
-  }
-
-  return json({status:"updated"});
-}
-
-function getApprovedComments(articleId){
-  const sheet = SpreadsheetApp.openById(SHEET_ID)
-    .getSheetByName("Comments");
-
-  const data = sheet.getDataRange().getValues();
-  data.shift();
-
-  return json(
-    data.filter(r=>r[1]===articleId && r[4]==="approved")
-  );
-}
-
-function getPendingComments(){
-  const sheet = SpreadsheetApp.openById(SHEET_ID)
-    .getSheetByName("Comments");
-
-  const data = sheet.getDataRange().getValues();
-  data.shift();
-
-  return json(
-    data.filter(r=>r[4]==="pending")
-  );
 }
