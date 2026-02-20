@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GlobalPress Admin</title>
+
+<style>
+body{
+  margin:0;
+  font-family:Arial, Helvetica, sans-serif;
+  background:#f4f6f9;
+}
+
+header{
+  background:#111;
+  color:#fff;
+  padding:15px 30px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+header h2{margin:0}
+
+button{
+  padding:8px 14px;
+  border:none;
+  cursor:pointer;
+  border-radius:4px;
+}
+
+.primary{background:#c00;color:#fff;}
+.danger{background:#900;color:#fff;}
+.success{background:#28a745;color:#fff;}
+.gray{background:#555;color:#fff;}
+
+.container{
+  padding:30px;
+}
+
+.card{
+  background:#fff;
+  padding:20px;
+  margin-bottom:20px;
+  border-radius:6px;
+  box-shadow:0 2px 6px rgba(0,0,0,.1);
+}
+
+input, textarea, select{
+  width:100%;
+  padding:10px;
+  margin-bottom:10px;
+  border:1px solid #ccc;
+  border-radius:4px;
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+}
+
+th,td{
+  padding:10px;
+  border-bottom:1px solid #ddd;
+  text-align:left;
+}
+
+.hidden{display:none}
+</style>
+</head>
+<body>
+
+<header>
+  <h2>GlobalPress Admin Panel</h2>
+  <button class="gray" onclick="logout()">Logout</button>
+</header>
+
+<div class="container">
+
+<!-- STATS -->
+<div class="card">
+  <h3>Dashboard Stats</h3>
+  <div id="stats"></div>
+</div>
+
+<!-- POST ARTICLE -->
+<div class="card">
+  <h3>Post New Article</h3>
+  <input id="title" placeholder="Article Title">
+  <textarea id="content" rows="6" placeholder="Article Content"></textarea>
+  <select id="category">
+    <option>Breaking</option>
+    <option>Politics</option>
+    <option>Business</option>
+    <option>Technology</option>
+  </select>
+  <button class="primary" onclick="postArticle()">Publish</button>
+</div>
+
+<!-- ARTICLES -->
+<div class="card">
+  <h3>Manage Articles</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="articlesTable"></tbody>
+  </table>
+</div>
+
+<!-- COMMENTS -->
+<div class="card">
+  <h3>Moderate Comments</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Article</th>
+        <th>Comment</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="commentsTable"></tbody>
+  </table>
+</div>
+
+</div>
+
+<script>
+
+const API = " https://script.google.com/macros/s/AKfycbxlDncSsQZSXJrJ6-dttceneARoV6lshz39ZJ4fTSNzvfmG_3fYW10_kQ5qqgpUvQkb/exec";
+let token = localStorage.getItem("token");
+
+/* -----------------------------
+   AUTH CHECK
+--------------------------------*/
+if(!token){
+  alert("Unauthorized");
+  window.location = "login.html";
+}
+
+/* -----------------------------
+   GENERIC REQUEST
+--------------------------------*/
+async function request(action, data = {}){
+  data.action = action;
+  data.token = token;
+
+  const res = await fetch(API,{
+    method:"POST",
+    body:JSON.stringify(data)
+  });
+
+  return res.json();
+}
+
+/* -----------------------------
+   LOAD STATS
+--------------------------------*/
+async function loadStats(){
+  const res = await request("stats");
+  document.getElementById("stats").innerHTML = `
+    Articles: ${res.articles}<br>
+    Users: ${res.users}<br>
+    Comments: ${res.comments}
+  `;
+}
+
+/* -----------------------------
+   POST ARTICLE
+--------------------------------*/
+async function postArticle(){
+  const title = document.getElementById("title").value;
+  const content = document.getElementById("content").value;
+  const category = document.getElementById("category").value;
+
+  await request("postArticle",{title,content,category});
+  alert("Article Published");
+  loadArticles();
+}
+
+/* -----------------------------
+   LOAD ARTICLES
+--------------------------------*/
+async function loadArticles(){
+  const res = await request("getArticles");
+  const table = document.getElementById("articlesTable");
+  table.innerHTML = "";
+
+  res.forEach(a=>{
+    table.innerHTML += `
+      <tr>
+        <td>${a.title}</td>
+        <td>
+          <button class="danger" onclick="deleteArticle('${a.id}')">Delete</button>
+        </td>
+      </tr>
+    `;
+  });
+}
+
+/* -----------------------------
+   DELETE ARTICLE
+--------------------------------*/
+async function deleteArticle(id){
+  if(confirm("Delete article?")){
+    await request("deleteArticle",{id});
+    loadArticles();
+  }
+}
+
+/* -----------------------------
+   LOAD COMMENTS
+--------------------------------*/
+async function loadComments(){
+  const res = await request("getComments");
+  const table = document.getElementById("commentsTable");
+  table.innerHTML = "";
+
+  res.forEach(c=>{
+    table.innerHTML += `
+      <tr>
+        <td>${c.articleTitle}</td>
+        <td>${c.comment}</td>
+        <td>${c.status}</td>
+        <td>
+          <button class="success" onclick="approve('${c.id}')">Approve</button>
+          <button class="danger" onclick="deleteComment('${c.id}')">Delete</button>
+        </td>
+      </tr>
+    `;
+  });
+}
+
+/* -----------------------------
+   APPROVE COMMENT
+--------------------------------*/
+async function approve(id){
+  await request("approveComment",{id});
+  loadComments();
+}
+
+/* -----------------------------
+   DELETE COMMENT
+--------------------------------*/
+async function deleteComment(id){
+  await request("deleteComment",{id});
+  loadComments();
+}
+
+/* -----------------------------
+   LOGOUT
+--------------------------------*/
+function logout(){
+  localStorage.removeItem("token");
+  window.location="login.html";
+}
+
+/* -----------------------------
+   INIT
+--------------------------------*/
+loadStats();
+loadArticles();
+loadComments();
+
+</script>
+</body>
+</html>
