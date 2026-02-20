@@ -1,54 +1,441 @@
+
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GlobalPress</title>
+
 <style>
-body{margin:0;font-family:Arial;background:#f4f4f4}
-header{background:#cc0000;color:white;padding:15px}
-.ticker{background:black;color:white;padding:8px}
-.label{background:red;padding:4px 8px;font-weight:bold}
-.container{max-width:1100px;margin:auto;padding:20px}
-.card{background:white;padding:15px;margin-bottom:20px;border-radius:6px}
+body{
+  margin:0;
+  font-family:Arial;
+  background:#f4f4f4;
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+}
+
+/* HEADER */
+header{
+  background:#cc0000;
+  color:white;
+  padding:15px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  position:relative;
+}
+
+header h1{margin:0}
+
+.nav{
+  display:flex;
+  align-items:center;
+}
+
+.nav a{
+  color:white;
+  margin-left:15px;
+  text-decoration:none;
+  font-weight:bold;
+  cursor:pointer;
+}
+
+/* HAMBURGER */
+.hamburger{
+  display:none;
+  flex-direction:column;
+  cursor:pointer;
+  gap:4px;
+}
+
+.hamburger div{
+  width:25px;
+  height:3px;
+  background:white;
+}
+
+/* TICKER */
+.ticker{
+  background:black;
+  color:white;
+  padding:8px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+.label{
+  background:red;
+  padding:4px 8px;
+  font-weight:bold;
+}
+
+.ticker-buttons{
+  display:flex;
+  gap:10px;
+}
+
+.btn-ticker{
+  background:#cc0000;
+  color:white;
+  padding:6px 12px;
+  border-radius:4px;
+  text-decoration:none;
+  font-weight:bold;
+}
+
+/* FILTER BAR */
+.filter-bar{
+  background:white;
+  padding:15px;
+  display:flex;
+  gap:10px;
+  justify-content:center;
+  flex-wrap:wrap;
+}
+
+.filter-bar input,
+.filter-bar select{
+  padding:8px;
+}
+
+/* ARTICLES */
+.container{
+  max-width:1100px;
+  margin:auto;
+  padding:20px;
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+  gap:20px;
+  flex:1;
+}
+
+.card{
+  background:white;
+  padding:15px;
+  border-radius:6px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.1);
+  transition:0.3s;
+}
+
+.card:hover{
+  transform:translateY(-4px);
+}
+
+.card img{
+  width:100%;
+  border-radius:4px;
+}
+
+.meta{
+  font-size:13px;
+  color:gray;
+  margin-top:5px;
+}
+
+.read-btn{
+  display:inline-block;
+  margin-top:10px;
+  background:#cc0000;
+  color:white;
+  padding:8px 12px;
+  text-decoration:none;
+  border-radius:4px;
+}
+
+/* PAGINATION */
+.pagination{
+  text-align:center;
+  margin:20px;
+}
+
+.pagination button{
+  padding:8px 12px;
+  margin:5px;
+  cursor:pointer;
+}
+
+/* FOOTER */
+footer{
+  background:#222;
+  color:white;
+  text-align:center;
+  padding:20px;
+  margin-top:auto;
+}
+
+/* MOBILE */
+@media(max-width:768px){
+  .hamburger{ display:flex; }
+
+  .nav{
+    position:absolute;
+    top:60px;
+    right:0;
+    background:#cc0000;
+    width:200px;
+    flex-direction:column;
+    display:none;
+    padding:15px;
+  }
+
+  .nav.active{ display:flex; }
+
+  .nav a{ margin:10px 0; }
+}
 </style>
 </head>
+
 <body>
 
-<header><h1>GlobalPress</h1></header>
+<header>
+  <h1>GlobalPress</h1>
+  <div class="nav" id="nav"></div>
+  <div class="hamburger" onclick="toggleMenu()">
+    <div></div>
+    <div></div>
+    <div></div>
+  </div>
+</header>
 
 <div class="ticker">
-<span class="label">BREAKING</span>
-<marquee id="tickerText"></marquee>
+  <span class="label">BREAKING</span>
+  <div class="ticker-buttons">
+    <a href="login.html" class="btn-ticker">Login</a>
+    <a href="register.html" class="btn-ticker">Register</a>
+  </div>
 </div>
 
-<div class="container" id="articles"></div>
+<marquee id="tickerText"></marquee>
+
+<div class="filter-bar">
+  <input type="text" id="search" placeholder="Search articles...">
+  <select id="category">
+    <option value="">All Categories</option>
+  </select>
+  <button onclick="filterArticles()">Filter</button>
+</div>
+
+<div class="container" id="articles">
+  Loading articles...
+</div>
+
+<div class="pagination" id="pagination"></div>
+
+<footer>
+© 2026 GlobalPress | PRO Edition
+</footer>
 
 <script>
-const API="https://script.google.com/macros/s/AKfycbyU5BzlCmJkLTGR6yyGQwZ3LAPBEvnSvySChcPxqLT02p1OOSUHOg7qjDZIAhLjzSg3/exec";
-
-fetch(API+"?action=breaking")
-.then(r=>r.json())
-.then(data=>{
-  document.getElementById("tickerText")
-  .innerText=data.map(a=>a[1]).join(" • ");
-});
-
-fetch(API+"?action=articles")
-.then(r=>r.json())
-.then(data=>{
-  const box=document.getElementById("articles");
-  data.forEach(a=>{
-    box.innerHTML+=`
+  const API = "https://script.google.com/macros/s/AKfycbxlDncSsQZSXJrJ6-dttceneARoV6lshz39ZJ4fTSNzvfmG_3fYW10_kQ5qqgpUvQkb/exec";
+  
+  let allArticles = [];
+  let filteredArticles = [];
+  const limit = 6;
+  
+  /* =========================
+     NAVIGATION (SECURE)
+  ========================= */
+  function setupNav() {
+    const nav = document.getElementById("nav");
+    const token = localStorage.getItem("token");
+    
+    nav.innerHTML = "";
+    
+    if (token) {
+      nav.innerHTML += `<a onclick="logout()">Logout</a>`;
+      nav.innerHTML += `<a href="admin.html">Dashboard</a>`;
+      autoRefreshToken();
+    } else {
+      nav.innerHTML = `<a href="login.html">Login</a>`;
+    }
+  }
+  
+  function logout() {
+    localStorage.clear();
+    location.reload();
+  }
+  
+  /* =========================
+     AUTO TOKEN REFRESH
+  ========================= */
+  function autoRefreshToken() {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    
+    fetch(API, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "refresh",
+          token: token
+        })
+      })
+      .then(r => r.json())
+      .then(d => {
+        if (d.token) {
+          localStorage.setItem("token", d.token);
+        }
+      })
+      .catch(() => {});
+  }
+  
+  /* =========================
+     BREAKING NEWS
+  ========================= */
+  function loadBreaking() {
+    fetch(API + "?action=breaking")
+      .then(r => r.json())
+      .then(data => {
+        const ticker = document.getElementById("tickerText");
+        
+        if (!data || data.length === 0) {
+          ticker.innerText = "No breaking news";
+          return;
+        }
+        
+        ticker.innerText =
+          data.map(a => a[1]).join(" • ");
+      })
+      .catch(() => {
+        tickerText.innerText = "Unable to load breaking news";
+      });
+  }
+  
+  /* =========================
+     LOAD ARTICLES
+  ========================= */
+  function loadArticles() {
+    fetch(API + "?action=getArticles")
+      .then(r => r.json())
+      .then(data => {
+        
+        // Convert backend row array into object format
+        allArticles = data.map(a => ({
+          id: a[0],
+          title: a[1],
+          slug: a[2],
+          content: a[3],
+          author: a[4],
+          image: a[5],
+          date: a[6],
+          status: a[7],
+          category: a[8] || "General",
+          views: a[9] || 0
+        }));
+        
+        filteredArticles = [...allArticles];
+        
+        populateCategories();
+        renderPage(1);
+      })
+      .catch(() => {
+        articles.innerText = "Error loading articles.";
+      });
+  }
+  
+  /* =========================
+     RENDER PAGE
+  ========================= */
+  function renderPage(page) {
+    const start = (page - 1) * limit;
+    const pageData = filteredArticles.slice(start, start + limit);
+    const box = document.getElementById("articles");
+    box.innerHTML = "";
+    
+    if (pageData.length === 0) {
+      box.innerText = "No articles found.";
+      return;
+    }
+    
+    pageData.forEach(a => {
+      box.innerHTML += `
       <div class="card">
-        <h2>${a[1]}</h2>
-        <img src="${a[5]}" width="100%">
-        <p>${a[3].substring(0,200)}...</p>
-        <a href="article.html?slug=${a[2]}">Read More</a>
+        <h2>${a.title}</h2>
+        <img src="${a.image || 'https://via.placeholder.com/400x200'}">
+        <div class="meta">
+          Author: ${a.author} | ${new Date(a.date).toLocaleDateString()}
+        </div>
+        <p>${a.content.substring(0,150)}...</p>
+        <a class="read-btn" href="article.html?slug=${encodeURIComponent(a.slug)}">
+          Read More
+        </a>
       </div>
     `;
+    });
+    
+    renderPagination(page);
+  }
+  
+  /* =========================
+     PAGINATION
+  ========================= */
+  function renderPagination(current) {
+    const container = document.getElementById("pagination");
+    container.innerHTML = "";
+    const pages = Math.ceil(filteredArticles.length / limit);
+    
+    for (let i = 1; i <= pages; i++) {
+      container.innerHTML += `
+      <button onclick="renderPage(${i})"
+      ${i===current?"disabled":""}>${i}</button>
+    `;
+    }
+  }
+  
+  /* =========================
+     FILTER
+  ========================= */
+  function populateCategories() {
+    const select = document.getElementById("category");
+    const categories = [...new Set(allArticles.map(a => a.category))];
+    
+    select.innerHTML = `<option value="">All Categories</option>`;
+    categories.forEach(cat => {
+      select.innerHTML += `<option value="${cat}">${cat}</option>`;
+    });
+  }
+  
+  function filterArticles() {
+    const search = document.getElementById("search").value.toLowerCase();
+    const category = document.getElementById("category").value;
+    
+    filteredArticles = allArticles.filter(a => {
+      const matchSearch =
+        a.title.toLowerCase().includes(search) ||
+        a.content.toLowerCase().includes(search);
+      
+      const matchCategory = category ? a.category === category : true;
+      
+      return matchSearch && matchCategory;
+    });
+    
+    renderPage(1);
+  }
+  
+  /* =========================
+     MOBILE
+  ========================= */
+  function toggleMenu() {
+    document.getElementById("nav").classList.toggle("active");
+  }
+  
+  document.addEventListener("click", function(e) {
+    const nav = document.getElementById("nav");
+    const burger = document.querySelector(".hamburger");
+    if (!nav.contains(e.target) && !burger.contains(e.target)) {
+      nav.classList.remove("active");
+    }
   });
-});
+  
+  /* =========================
+     INIT
+  ========================= */
+  setupNav();
+  loadBreaking();
+  loadArticles();
 </script>
-<a href="../article.html">Articles</a>||<a href="../dashboard.html">Dashboard</a>
+
 </body>
 </html>
