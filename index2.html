@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GlobalPress</title>
+
+<style>
+*{
+  box-sizing:border-box;
+  margin:0;
+  padding:0;
+}
+
+html, body{
+  height:100%;
+}
+
+body{
+  font-family:Arial, Helvetica, sans-serif;
+  background:#f4f4f4;
+  display:flex;
+  flex-direction:column;
+}
+
+/* Main wrapper ensures footer stability */
+.main-wrapper{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+}
+
+/* HEADER */
+header{
+  background:#cc0000;
+  color:white;
+  padding:15px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  position:relative;
+}
+header h1{margin:0}
+
+.nav{
+  display:flex;
+  align-items:center;
+}
+.nav a{
+  color:white;
+  margin-left:15px;
+  text-decoration:none;
+  font-weight:bold;
+  cursor:pointer;
+}
+
+.hamburger{
+  display:none;
+  flex-direction:column;
+  cursor:pointer;
+  gap:4px;
+}
+.hamburger div{
+  width:25px;
+  height:3px;
+  background:white;
+}
+
+/* BREAKING SECTION */
+.ticker{
+  background:black;
+  color:white;
+  padding:8px 15px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.label{
+  background:red;
+  padding:4px 8px;
+  font-weight:bold;
+}
+.ticker-buttons{
+  display:flex;
+  gap:10px;
+}
+.btn-ticker{
+  background:#cc0000;
+  color:white;
+  padding:6px 12px;
+  border-radius:4px;
+  text-decoration:none;
+  font-weight:bold;
+}
+
+/* MARQUEE */
+#tickerText{
+  background:#111;
+  color:white;
+  padding:8px;
+}
+
+/* FILTER BAR */
+.filter-bar{
+  background:white;
+  padding:15px;
+  display:flex;
+  gap:10px;
+  justify-content:center;
+  flex-wrap:wrap;
+}
+.filter-bar input,
+.filter-bar select{
+  padding:8px;
+}
+
+/* ARTICLE GRID */
+.container{
+  max-width:1100px;
+  margin:auto;
+  padding:20px;
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+  gap:20px;
+  width:100%;
+}
+
+/* CARD */
+.card{
+  background:white;
+  padding:15px;
+  border-radius:6px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.1);
+  transition:0.3s;
+}
+.card:hover{
+  transform:translateY(-4px);
+}
+.card img{
+  width:100%;
+  border-radius:4px;
+}
+.meta{
+  font-size:13px;
+  color:gray;
+  margin-top:5px;
+}
+.read-btn{
+  display:inline-block;
+  margin-top:10px;
+  background:#cc0000;
+  color:white;
+  padding:8px 12px;
+  text-decoration:none;
+  border-radius:4px;
+}
+
+/* PAGINATION */
+.pagination{
+  text-align:right;
+  margin:20px;
+}
+.pagination button{
+  padding:8px 12px;
+  margin:5px;
+  cursor:pointer;
+}
+
+/* FOOTER */
+footer{
+  background:#222;
+  color:white;
+  text-align:center;
+  padding:20px;
+}
+
+/* MOBILE */
+@media(max-width:768px){
+  .hamburger{display:flex;}
+  .nav{
+    position:absolute;
+    top:60px;
+    right:0;
+    background:#cc0000;
+    width:200px;
+    flex-direction:column;
+    display:none;
+    padding:15px;
+  }
+  .nav.active{display:flex;}
+  .nav a{margin:10px 0;}
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>GlobalPress</h1>
+  <div class="nav" id="nav"></div>
+  <div class="hamburger" onclick="toggleMenu()">
+    <div></div><div></div><div></div>
+  </div>
+</header>
+
+<div class="main-wrapper">
+
+<div class="ticker">
+  <span class="label">BREAKING</span>
+  <div class="ticker-buttons">
+    <a href="login.html" class="btn-ticker">Login</a>
+    <a href="register.html" class="btn-ticker">Register</a>
+  </div>
+</div>
+
+<marquee id="tickerText"></marquee>
+
+<div class="filter-bar">
+  <input type="text" id="search" placeholder="Search articles...">
+  <select id="category">
+    <option value="">All Categories</option>
+  </select>
+  <button onclick="filterArticles()">Filter</button>
+</div>
+
+<div class="container" id="articles">
+  Loading articles...
+</div>
+
+<div class="pagination" id="pagination"></div>
+
+</div>
+
+<footer>
+© 2026 GlobalPress | PRO Edition
+</footer>
+
+<script>
+const API = "https://script.google.com/macros/s/AKfycbxlDncSsQZSXJrJ6-dttceneARoV6lshz39ZJ4fTSNzvfmG_3fYW10_kQ5qqgpUvQkb/exec";
+
+let allArticles = [];
+let filteredArticles = [];
+const limit = 6;
+
+/* NAV */
+function setupNav() {
+  const nav = document.getElementById("nav");
+  const token = localStorage.getItem("token");
+  nav.innerHTML = token
+    ? `<a onclick="logout()">Logout</a><a href="admin.html">Dashboard</a>`
+    : `<a href="login.html">Login</a>`;
+}
+
+function logout() {
+  localStorage.clear();
+  location.reload();
+}
+
+/* BREAKING */
+function loadBreaking() {
+  fetch(API + "?action=breaking")
+    .then(r => r.json())
+    .then(data => {
+      const ticker = document.getElementById("tickerText");
+      ticker.innerText =
+        data && data.length
+        ? data.map(a => a[1]).join(" • ")
+        : "No breaking news";
+    })
+    .catch(() =>
+      document.getElementById("tickerText").innerText =
+      "Unable to load breaking news"
+    );
+}
+
+/* ARTICLES */
+function loadArticles() {
+  fetch(API + "?action=articles")
+    .then(r => r.json())
+    .then(data => {
+      if (!data.articles || !data.articles.length) {
+        document.getElementById("articles").innerText =
+          "No articles available.";
+        return;
+      }
+      allArticles = data.articles;
+      filteredArticles = [...allArticles];
+      populateCategories();
+      renderPage(1);
+    })
+    .catch(() =>
+      document.getElementById("articles").innerText =
+      "Error loading articles."
+    );
+}
+
+function renderPage(page) {
+  const start = (page - 1) * limit;
+  const pageData = filteredArticles.slice(start, start + limit);
+  const box = document.getElementById("articles");
+  box.innerHTML = "";
+
+  if (!pageData.length) {
+    box.innerText = "No articles found.";
+    return;
+  }
+
+  pageData.forEach(a => {
+    box.innerHTML += `
+      <div class="card">
+        <h2>${a.title}</h2>
+        <img src="${a.image || 'https://via.placeholder.com/400x200'}">
+        <div class="meta">${new Date(a.date).toLocaleDateString()}</div>
+        <p>${a.content.substring(0,150)}...</p>
+        <a class="read-btn"
+           href="article.html?slug=${encodeURIComponent(a.slug)}">
+           Read More
+        </a>
+      </div>
+    `;
+  });
+
+  renderPagination(page);
+}
+
+function renderPagination(current) {
+  const container = document.getElementById("pagination");
+  container.innerHTML = "";
+  const pages = Math.ceil(filteredArticles.length / limit);
+
+  for (let i = 1; i <= pages; i++) {
+    container.innerHTML +=
+      `<button onclick="renderPage(${i})"
+       ${i===current?"disabled":""}>${i}</button>`;
+  }
+}
+
+function populateCategories() {
+  const select = document.getElementById("category");
+  const categories =
+    [...new Set(allArticles.map(a => a.category || "General"))];
+
+  select.innerHTML = `<option value="">All Categories</option>`;
+  categories.forEach(cat =>
+    select.innerHTML += `<option value="${cat}">${cat}</option>`
+  );
+}
+
+function filterArticles() {
+  const search =
+    document.getElementById("search").value.toLowerCase();
+  const category =
+    document.getElementById("category").value;
+
+  filteredArticles = allArticles.filter(a =>
+    (a.title.toLowerCase().includes(search) ||
+     a.content.toLowerCase().includes(search)) &&
+    (category ? a.category === category : true)
+  );
+
+  renderPage(1);
+}
+
+function toggleMenu() {
+  document.getElementById("nav").classList.toggle("active");
+}
+
+document.addEventListener("click", function(e) {
+  const nav = document.getElementById("nav");
+  const burger = document.querySelector(".hamburger");
+  if (!nav.contains(e.target) &&
+      !burger.contains(e.target)) {
+    nav.classList.remove("active");
+  }
+});
+
+setupNav();
+loadBreaking();
+loadArticles();
+</script>
+
+</body>
+</html>
